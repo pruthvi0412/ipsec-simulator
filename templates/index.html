@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IPsec — Digital Signature Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ── RESET & BASE ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f8fafc;--surface:#ffffff;--surface2:#f1f5f9;--surface3:#e2e8f0;
+  --border:#e2e8f0;--border-glow:#86efac44;
+  --text:#0f172a;--text-dim:#475569;--text-muted:#64748b;
+  --cyan:#0284c7;--green:#16a34a;--red:#dc2626;--amber:#d97706;--purple:#7c3aed;
+  --cyan-dim:#e0f2fe;--green-dim:#dcfce7;--red-dim:#fee2e2;
+  --font-mono:'JetBrains Mono',monospace;--font-sans:'Inter',system-ui,sans-serif;
+  --radius:12px;--radius-sm:8px;
+}
+html{scroll-behavior:smooth}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background:
+  radial-gradient(ellipse 80% 50% at 50% -20%,#e0f2fe,transparent),
+  radial-gradient(ellipse 60% 40% at 80% 100%,#f3e8ff,transparent);
+  pointer-events:none;z-index:0}
+
+/* ── ANIMATED GRID BACKGROUND ── */
+.grid-bg{position:fixed;inset:0;z-index:0;overflow:hidden;opacity:.3}
+.grid-bg::before{content:'';position:absolute;inset:-50%;
+  background-image:
+    linear-gradient(#e2e8f0 1px,transparent 1px),
+    linear-gradient(90deg,#e2e8f0 1px,transparent 1px);
+  background-size:60px 60px;
+  animation:gridScroll 60s linear infinite}
+@keyframes gridScroll{to{transform:translate(60px,60px)}}
+
+/* ── LAYOUT ── */
+.app{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:20px 24px 60px}
+
+/* ── HEADER ── */
+.header{text-align:center;padding:40px 0 36px;position:relative}
+.header::after{content:'';display:block;width:120px;height:2px;margin:20px auto 0;
+  background:linear-gradient(90deg,transparent,var(--green),transparent)}
+.logo{display:inline-flex;align-items:center;gap:14px;margin-bottom:8px}
+.logo-icon{width:48px;height:48px;position:relative}
+.logo-icon svg{width:100%;height:100%;filter:drop-shadow(0 0 8px #86efac)}
+.logo h1{font-size:28px;font-weight:700;letter-spacing:-.5px;
+  background:linear-gradient(135deg,#15803d,#16a34a);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header p{color:var(--text-dim);font-size:14px;margin-top:4px;font-weight:500;letter-spacing:.5px;text-transform:uppercase}
+
+/* ── NAV TABS ── */
+.nav{display:flex;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:4px;margin-bottom:28px;overflow-x:auto;box-shadow:0 1px 3px rgba(0,0,0,0.05)}
+.nav-btn{flex:1;min-width:0;padding:10px 12px;border:none;background:transparent;color:var(--text-dim);
+  font-family:var(--font-sans);font-size:13px;font-weight:600;cursor:pointer;border-radius:var(--radius-sm);
+  transition:all .2s;white-space:nowrap;display:flex;align-items:center;justify-content:center;gap:6px}
+.nav-btn:hover{color:var(--text);background:var(--surface2)}
+.nav-btn.active{background:var(--green-dim);color:var(--green);box-shadow:0 1px 2px rgba(0,0,0,0.05)}
+.nav-btn .icon{font-size:16px;flex-shrink:0}
+
+/* ── PANELS ── */
+.panel{display:none;animation:fadeIn .3s ease}
+.panel.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── CARD ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  overflow:hidden;margin-bottom:20px;transition:border-color .3s;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05),0 2px 4px -1px rgba(0,0,0,0.03)}
+.card:hover{border-color:#cbd5e1}
+.card-head{padding:20px 24px 0;display:flex;align-items:center;gap:10px}
+.card-head .badge{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  font-size:16px;flex-shrink:0}
+.card-head .badge.cyan{background:var(--cyan-dim);color:var(--cyan)}
+.card-head .badge.green{background:var(--green-dim);color:var(--green)}
+.card-head .badge.red{background:var(--red-dim);color:var(--red)}
+.card-head .badge.purple{background:#f3e8ff;color:var(--purple)}
+.card-head h2{font-size:16px;font-weight:700}
+.card-head p{font-size:12px;color:var(--text-muted);margin-top:2px}
+.card-body{padding:20px 24px 24px}
+
+/* ── FORMS ── */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.form-grid.single{grid-template-columns:1fr}
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-group.full{grid-column:1/-1}
+.form-label{font-size:12px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.8px}
+.form-input{padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);
+  color:var(--text);font-family:var(--font-mono);font-size:14px;transition:all .2s;outline:none;box-shadow:0 1px 2px rgba(0,0,0,0.05) inset}
+.form-input:focus{border-color:var(--green);box-shadow:0 0 0 3px var(--green-dim)}
+.form-input::placeholder{color:var(--text-muted)}
+textarea.form-input{resize:vertical;min-height:80px;font-size:13px}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 24px;
+  border:none;border-radius:var(--radius-sm);font-family:var(--font-sans);font-size:14px;font-weight:600;
+  cursor:pointer;transition:all .25s;position:relative;overflow:hidden}
+.btn::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .25s}
+.btn:hover::before{opacity:0.1;background-color:#000}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:linear-gradient(135deg,#bbf7d0,#86efac);color:#14532d;box-shadow:0 4px 12px rgba(134,239,172,0.5);border:1px solid #86efac}
+.btn-primary:hover{box-shadow:0 4px 16px rgba(134,239,172,0.7);background:linear-gradient(135deg,#86efac,#4ade80)}
+.btn-success{background:linear-gradient(135deg,#86efac,#4ade80);color:#14532d;box-shadow:0 4px 12px rgba(74,222,128,0.4)}
+.btn-danger{background:linear-gradient(135deg,#fca5a5,#f87171);color:#7f1d1d;box-shadow:0 4px 12px rgba(248,113,113,0.4)}
+.btn-purple{background:linear-gradient(135deg,#d8b4fe,#c084fc);color:#4c1d95;box-shadow:0 4px 12px rgba(192,132,252,0.4)}
+.btn-ghost{background:var(--surface);color:var(--text-dim);border:1px solid var(--border)}
+.btn-ghost:hover{color:var(--text);border-color:var(--green);background:var(--surface2)}
+.btn-row{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}
+
+/* ── RESULTS ── */
+.result-box{margin-top:20px;border-radius:var(--radius-sm);overflow:hidden;animation:fadeIn .3s;display:none;box-shadow:0 1px 3px rgba(0,0,0,0.1)}
+.result-box.show{display:block}
+.result-header{padding:12px 16px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px}
+.result-header.success{background:#dcfce7;color:var(--green);border-bottom:1px solid #bbf7d0}
+.result-header.error{background:#fee2e2;color:var(--red);border-bottom:1px solid #fecaca}
+.result-header .dot{width:8px;height:8px;border-radius:50%;animation:pulse 2s infinite}
+.result-header.success .dot{background:var(--green)}
+.result-header.error .dot{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.result-body{padding:16px;background:var(--surface);border:1px solid var(--border);border-top:0;
+  border-radius:0 0 var(--radius-sm) var(--radius-sm)}
+.result-row{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);align-items:flex-start}
+.result-row:last-child{border-bottom:none}
+.result-key{font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.5px;
+  min-width:110px;flex-shrink:0;padding-top:2px}
+.result-val{font-family:var(--font-mono);font-size:13px;color:var(--text);word-break:break-all;line-height:1.5}
+.result-val.dim{color:var(--text-dim)}
+.result-val.success-text{color:var(--green)}
+.result-val.error-text{color:var(--red)}
+
+/* ── SA TABLE ── */
+.sa-table{width:100%;border-collapse:collapse;font-size:13px}
+.sa-table th{text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--green);
+  text-transform:uppercase;letter-spacing:.8px;border-bottom:2px solid var(--border);white-space:nowrap}
+.sa-table td{padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:13px}
+.sa-table tr:hover td{background:var(--surface2)}
+.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.status-dot.active{background:var(--green);box-shadow:0 0 8px var(--green-dim)}
+.status-dot.expired{background:var(--red);box-shadow:0 0 8px var(--red-dim)}
+.empty-state{text-align:center;padding:40px 20px;color:var(--text-muted)}
+.empty-state .icon{font-size:40px;margin-bottom:12px;opacity:.5}
+.empty-state p{font-size:14px}
+
+/* ── TEST RESULTS ── */
+.test-item{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;box-shadow:0 1px 2px rgba(0,0,0,0.05)}
+.test-icon{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:700;flex-shrink:0}
+.test-icon.pass{background:var(--green-dim);color:var(--green)}
+.test-icon.fail{background:var(--red-dim);color:var(--red)}
+.test-info{flex:1}
+.test-name{font-size:14px;font-weight:600}
+.test-detail{font-size:12px;color:var(--text-dim);margin-top:2px;font-family:var(--font-mono)}
+.test-summary{margin-top:16px;padding:16px;border-radius:var(--radius-sm);text-align:center;font-weight:700;font-size:15px}
+.test-summary.pass{background:var(--green-dim);color:var(--green);border:1px solid #86efac}
+.test-summary.fail{background:var(--red-dim);color:var(--red);border:1px solid #fca5a5}
+
+/* ── SPINNER ── */
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid transparent;border-top-color:currentColor;
+  border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.btn.loading{pointer-events:none;opacity:.7}
+
+/* ── RESPONSIVE ── */
+@media(max-width:640px){
+  .form-grid{grid-template-columns:1fr}
+  .nav{flex-wrap:wrap}
+  .nav-btn{font-size:12px;padding:8px}
+  .app{padding:12px 12px 40px}
+}
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+
+<div class="app">
+  <!-- HEADER -->
+  <header class="header">
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 48 48" fill="none"><rect x="6" y="20" width="36" height="24" rx="4" stroke="#00d4ff" stroke-width="2.5"/>
+        <path d="M16 20v-6a8 8 0 1 1 16 0v6" stroke="#a855f7" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="24" cy="32" r="3" fill="#00d4ff"/><path d="M24 35v4" stroke="#00d4ff" stroke-width="2.5" stroke-linecap="round"/></svg>
+      </div>
+      <div>
+        <h1>IPsec Simulator</h1>
+        <p>Digital Signature &amp; Encryption Lab</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- NAVIGATION -->
+  <nav class="nav" id="nav">
+    <button class="nav-btn active" data-tab="sa"><span class="icon">🔑</span>Manage SA</button>
+    <button class="nav-btn" data-tab="encrypt"><span class="icon">🔒</span>Encrypt &amp; Sign</button>
+    <button class="nav-btn" data-tab="decrypt"><span class="icon">🔓</span>Decrypt &amp; Verify</button>
+    <button class="nav-btn" data-tab="tamper"><span class="icon">⚠️</span>Tamper Test</button>
+    <button class="nav-btn" data-tab="database"><span class="icon">🗄️</span>SA Database</button>
+    <button class="nav-btn" data-tab="tests"><span class="icon">🧪</span>Run Tests</button>
+  </nav>
+
+  <!-- ════════ PANEL: MANAGE SA ════════ -->
+  <section class="panel active" id="panel-sa">
+    <!-- Add SA -->
+    <div class="card">
+      <div class="card-head"><div class="badge cyan">+</div><div><h2>Create Security Association</h2><p>Add a new SA entry to the Security Association Database</p></div></div>
+      <div class="card-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">SPI (Security Parameters Index)</label>
+            <input class="form-input" type="number" id="addSpi" placeholder="1001">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Lifetime (seconds)</label>
+            <input class="form-input" type="number" id="addLifetime" value="3600" placeholder="3600">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Source IP Address</label>
+            <input class="form-input" type="text" id="addSource" placeholder="192.168.1.10">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Destination IP Address</label>
+            <input class="form-input" type="text" id="addDest" placeholder="192.168.1.20">
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="btnAddSa">🔑 Create SA</button>
+        </div>
+        <div class="result-box" id="resultAddSa"></div>
+      </div>
+    </div>
+
+    <!-- Lookup SA -->
+    <div class="card">
+      <div class="card-head"><div class="badge green">?</div><div><h2>Lookup SA Status</h2><p>Check if a Security Association is active or expired</p></div></div>
+      <div class="card-body">
+        <div class="form-grid single">
+          <div class="form-group">
+            <label class="form-label">SPI</label>
+            <input class="form-input" type="number" id="getSpi" placeholder="1001">
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="btnGetSa">🔍 Lookup</button>
+        </div>
+        <div class="result-box" id="resultGetSa"></div>
+      </div>
+    </div>
+
+    <!-- Delete SA -->
+    <div class="card">
+      <div class="card-head"><div class="badge red">✕</div><div><h2>Delete Security Association</h2><p>Remove an SA entry from the database</p></div></div>
+      <div class="card-body">
+        <div class="form-grid single">
+          <div class="form-group">
+            <label class="form-label">SPI</label>
+            <input class="form-input" type="number" id="delSpi" placeholder="1001">
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-danger" id="btnDelSa">🗑️ Delete SA</button>
+        </div>
+        <div class="result-box" id="resultDelSa"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ PANEL: ENCRYPT ════════ -->
+  <section class="panel" id="panel-encrypt">
+    <div class="card">
+      <div class="card-head"><div class="badge cyan">🔒</div><div><h2>Encrypt &amp; Sign Message</h2><p>AES-256-CBC encryption with RSA-PSS-SHA256 digital signature</p></div></div>
+      <div class="card-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">SPI</label>
+            <input class="form-input" type="number" id="encSpi" placeholder="1001">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Plaintext Message</label>
+            <input class="form-input" type="text" id="encText" placeholder="HELLO BOB">
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="btnEncrypt">🔒 Encrypt &amp; Sign</button>
+        </div>
+        <div class="result-box" id="resultEncrypt"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ PANEL: DECRYPT ════════ -->
+  <section class="panel" id="panel-decrypt">
+    <div class="card">
+      <div class="card-head"><div class="badge green">🔓</div><div><h2>Decrypt &amp; Verify Signature</h2><p>Verify RSA-PSS-SHA256 signature then decrypt AES-256-CBC ciphertext</p></div></div>
+      <div class="card-body">
+        <div class="form-grid single">
+          <div class="form-group">
+            <label class="form-label">SPI</label>
+            <input class="form-input" type="number" id="decSpi" placeholder="1001">
+          </div>
+          <div class="form-group">
+            <label class="form-label">IV (hex)</label>
+            <input class="form-input" type="text" id="decIv" placeholder="Paste IV hex from encryption result">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Ciphertext (hex)</label>
+            <textarea class="form-input" id="decCt" placeholder="Paste ciphertext hex from encryption result"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Signature (hex)</label>
+            <textarea class="form-input" id="decSig" placeholder="Paste signature hex from encryption result"></textarea>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-success" id="btnDecrypt">🔓 Decrypt &amp; Verify</button>
+        </div>
+        <div class="result-box" id="resultDecrypt"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ PANEL: TAMPER TEST ════════ -->
+  <section class="panel" id="panel-tamper">
+    <div class="card">
+      <div class="card-head"><div class="badge red">⚠️</div><div><h2>Integrity Tamper Test</h2><p>Encrypt a message, tamper with the ciphertext, and verify that the digital signature detects the modification</p></div></div>
+      <div class="card-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">SPI</label>
+            <input class="form-input" type="number" id="tampSpi" placeholder="1001">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Test Message</label>
+            <input class="form-input" type="text" id="tampText" value="HELLO BOB" placeholder="HELLO BOB">
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-danger" id="btnTamper">⚠️ Run Tamper Test</button>
+        </div>
+        <div class="result-box" id="resultTamper"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ PANEL: DATABASE ════════ -->
+  <section class="panel" id="panel-database">
+    <div class="card">
+      <div class="card-head"><div class="badge purple">🗄️</div><div><h2>Security Association Database</h2><p>All SA entries currently stored in the SAD</p></div></div>
+      <div class="card-body">
+        <div class="btn-row" style="margin-top:0;margin-bottom:16px">
+          <button class="btn btn-primary" id="btnRefreshDb">🔄 Refresh</button>
+        </div>
+        <div id="saTableContainer">
+          <div class="empty-state"><div class="icon">🗄️</div><p>No Security Associations found. Create one first.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ PANEL: TESTS ════════ -->
+  <section class="panel" id="panel-tests">
+    <div class="card">
+      <div class="card-head"><div class="badge purple">🧪</div><div><h2>Automated Test Suite</h2><p>Run all 6 test cases — SA lifecycle, encryption, decryption, authentication, tamper detection, and expiration</p></div></div>
+      <div class="card-body">
+        <div class="btn-row" style="margin-top:0">
+          <button class="btn btn-purple" id="btnRunTests">🧪 Run All Tests</button>
+        </div>
+        <div id="testResults" style="margin-top:20px"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+// ── Tab Navigation ──
+document.querySelectorAll('.nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'database') refreshDb();
+  });
+});
+
+// ── Helpers ──
+async function apiPost(url, body) {
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  return res.json();
+}
+async function apiGet(url) { return (await fetch(url)).json(); }
+
+function setLoading(btn, loading) {
+  if (loading) { btn.dataset.origHtml = btn.innerHTML; btn.innerHTML = '<span class="spinner"></span> Processing...'; btn.classList.add('loading'); }
+  else { btn.innerHTML = btn.dataset.origHtml; btn.classList.remove('loading'); }
+}
+
+function showResult(id, status, rows) {
+  const box = document.getElementById(id);
+  const isOk = status === 'success';
+  let html = `<div class="result-header ${isOk ? 'success' : 'error'}"><span class="dot"></span>${isOk ? 'Operation Successful' : 'Error'}</div><div class="result-body">`;
+  rows.forEach(([k, v, cls]) => {
+    html += `<div class="result-row"><span class="result-key">${k}</span><span class="result-val ${cls || ''}">${v}</span></div>`;
+  });
+  html += '</div>';
+  box.innerHTML = html;
+  box.classList.add('show');
+}
+
+function showError(id, msg) {
+  showResult(id, 'error', [['Error', msg, 'error-text']]);
+}
+
+function truncHex(hex, len = 64) {
+  return hex.length > len ? hex.slice(0, len) + '…' : hex;
+}
+
+// ── Add SA ──
+document.getElementById('btnAddSa').addEventListener('click', async function() {
+  const spi = document.getElementById('addSpi').value;
+  const source = document.getElementById('addSource').value;
+  const dest = document.getElementById('addDest').value;
+  const lifetime = document.getElementById('addLifetime').value;
+  if (!spi || !source || !dest) return showError('resultAddSa', 'Please fill all required fields.');
+  setLoading(this, true);
+  try {
+    const j = await apiPost('/api/add_sa', { spi, source, destination: dest, lifetime });
+    if (j.status === 'success') {
+      showResult('resultAddSa', 'success', [
+        ['Status', 'SA Created Successfully', 'success-text'],
+        ['SPI', spi], ['Source', source], ['Destination', dest],
+        ['Encryption', 'AES-256-CBC'], ['Authentication', 'RSA-PSS-SHA256'],
+        ['Lifetime', lifetime + ' seconds']
+      ]);
+    } else showError('resultAddSa', j.message);
+  } catch(e) { showError('resultAddSa', e.message); }
+  setLoading(this, false);
+});
+
+// ── Lookup SA ──
+document.getElementById('btnGetSa').addEventListener('click', async function() {
+  const spi = document.getElementById('getSpi').value;
+  if (!spi) return showError('resultGetSa', 'Enter an SPI.');
+  setLoading(this, true);
+  try {
+    const j = await apiPost('/api/get_sa', { spi });
+    if (j.status === 'success') {
+      const sa = j.sa;
+      showResult('resultGetSa', 'success', [
+        ['Status', sa.active ? '● Active' : '● Expired', sa.active ? 'success-text' : 'error-text'],
+        ['SPI', sa.spi], ['Source', sa.source], ['Destination', sa.destination],
+        ['Encryption', sa.encryption], ['Authentication', sa.authentication],
+        ['Remaining', sa.remaining + 's / ' + sa.lifetime + 's']
+      ]);
+    } else showError('resultGetSa', j.message);
+  } catch(e) { showError('resultGetSa', e.message); }
+  setLoading(this, false);
+});
+
+// ── Delete SA ──
+document.getElementById('btnDelSa').addEventListener('click', async function() {
+  const spi = document.getElementById('delSpi').value;
+  if (!spi) return showError('resultDelSa', 'Enter an SPI.');
+  setLoading(this, true);
+  try {
+    const j = await apiPost('/api/delete_sa', { spi });
+    if (j.status === 'success') showResult('resultDelSa', 'success', [['Status', j.message, 'success-text']]);
+    else showError('resultDelSa', j.message);
+  } catch(e) { showError('resultDelSa', e.message); }
+  setLoading(this, false);
+});
+
+// ── Encrypt ──
+document.getElementById('btnEncrypt').addEventListener('click', async function() {
+  const spi = document.getElementById('encSpi').value;
+  const text = document.getElementById('encText').value;
+  if (!spi || !text) return showError('resultEncrypt', 'Enter SPI and message.');
+  setLoading(this, true);
+  try {
+    const j = await apiPost('/api/encrypt', { spi, text });
+    if (j.status === 'success') {
+      showResult('resultEncrypt', 'success', [
+        ['Plaintext', j.plaintext],
+        ['Algorithm', j.algorithm],
+        ['Auth Method', j.auth_method],
+        ['IV', `<span title="${j.iv}" style="cursor:help">${j.iv}</span>`],
+        ['Ciphertext', `<span title="${j.ciphertext}" style="cursor:help">${truncHex(j.ciphertext)}</span>`],
+        ['Signature', `<span title="${j.signature}" style="cursor:help">${truncHex(j.signature)}</span>`]
+      ]);
+      // Auto-fill decrypt panel
+      document.getElementById('decSpi').value = spi;
+      document.getElementById('decIv').value = j.iv;
+      document.getElementById('decCt').value = j.ciphertext;
+      document.getElementById('decSig').value = j.signature;
+    } else showError('resultEncrypt', j.message);
+  } catch(e) { showError('resultEncrypt', e.message); }
+  setLoading(this, false);
+});
+
+// ── Decrypt ──
+document.getElementById('btnDecrypt').addEventListener('click', async function() {
+  const spi = document.getElementById('decSpi').value;
+  const iv = document.getElementById('decIv').value.trim();
+  const ct = document.getElementById('decCt').value.trim();
+  const sig = document.getElementById('decSig').value.trim();
+  if (!spi || !iv || !ct || !sig) return showError('resultDecrypt', 'All fields are required.');
+  setLoading(this, true);
+  try {
+    const j = await apiPost('/api/decrypt', { spi, iv, ciphertext: ct, signature: sig });
+    if (j.status === 'success') {
+      showResult('resultDecrypt', 'success', [
+        ['Signature', '✓ Valid — Authentication Successful', 'success-text'],
+        ['Decrypted', j.decrypted, 'success-text'],
+        ['Auth Method', j.auth_method]
+      ]);
+    } else {
+      showResult('resultDecrypt', 'error', [
+        ['Signature', '✗ ' + j.message, 'error-text'],
+        ['Tampered', j.tampered ? 'Yes — Data integrity compromised' : 'Unknown', 'error-text']
+      ]);
+    }
+  } catch(e) { showError('resultDecrypt', e.message); }
+  setLoading(this, false);
+});
+
+// ── Tamper Test ──
+document.getElementById('btnTamper').addEventListener('click', async function() {
+  const spi = document.getElementById('tampSpi').value;
+  const text = document.getElementById('tampText').value;
+  if (!spi || !text) return showError('resultTamper', 'Enter SPI and message.');
+  setLoading(this, true);
+  try {
+    const j = await apiPost('/api/tamper_test', { spi, text });
+    if (j.status === 'success') {
+      showResult('resultTamper', j.tamper_detected ? 'success' : 'error', [
+        ['Plaintext', j.plaintext],
+        ['Original CT', truncHex(j.original_ciphertext)],
+        ['Tampered CT', truncHex(j.tampered_ciphertext)],
+        ['Detected', j.tamper_detected
+          ? '✓ TAMPERING DETECTED — Signature verification failed as expected'
+          : '✗ TAMPERING NOT DETECTED — Security failure!',
+          j.tamper_detected ? 'success-text' : 'error-text']
+      ]);
+    } else showError('resultTamper', j.message);
+  } catch(e) { showError('resultTamper', e.message); }
+  setLoading(this, false);
+});
+
+// ── Database ──
+async function refreshDb() {
+  const container = document.getElementById('saTableContainer');
+  try {
+    const j = await apiGet('/api/list_sa');
+    if (j.associations.length === 0) {
+      container.innerHTML = '<div class="empty-state"><div class="icon">🗄️</div><p>No Security Associations found. Create one first.</p></div>';
+      return;
+    }
+    let html = '<div style="overflow-x:auto"><table class="sa-table"><thead><tr><th>SPI</th><th>Source</th><th>Destination</th><th>Encryption</th><th>Status</th><th>Remaining</th></tr></thead><tbody>';
+    j.associations.forEach(sa => {
+      const active = sa.active && sa.remaining > 0;
+      html += `<tr>
+        <td style="color:var(--cyan);font-weight:700">${sa.spi}</td>
+        <td>${sa.source}</td><td>${sa.destination}</td>
+        <td>${sa.encryption}</td>
+        <td><span class="status-dot ${active ? 'active' : 'expired'}"></span>${active ? 'Active' : 'Expired'}</td>
+        <td>${sa.remaining}s / ${sa.lifetime}s</td></tr>`;
+    });
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+  } catch(e) { container.innerHTML = '<div class="empty-state"><p style="color:var(--red)">Failed to load: ' + e.message + '</p></div>'; }
+}
+document.getElementById('btnRefreshDb').addEventListener('click', refreshDb);
+
+// ── Run Tests ──
+document.getElementById('btnRunTests').addEventListener('click', async function() {
+  const container = document.getElementById('testResults');
+  setLoading(this, true);
+  container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim)"><span class="spinner" style="width:24px;height:24px;border-width:3px"></span><p style="margin-top:12px">Running test suite...</p></div>';
+  try {
+    const j = await apiPost('/api/run_tests', {});
+    let html = '';
+    j.results.forEach(t => {
+      html += `<div class="test-item">
+        <div class="test-icon ${t.passed ? 'pass' : 'fail'}">${t.passed ? '✓' : '✗'}</div>
+        <div class="test-info"><div class="test-name">${t.name}</div><div class="test-detail">${t.detail}</div></div>
+      </div>`;
+    });
+    html += `<div class="test-summary ${j.all_passed ? 'pass' : 'fail'}">${j.all_passed ? '✓ ALL 6 TEST CASES PASSED' : '✗ SOME TESTS FAILED'}</div>`;
+    container.innerHTML = html;
+  } catch(e) { container.innerHTML = '<div style="color:var(--red)">Error: ' + e.message + '</div>'; }
+  setLoading(this, false);
+});
+</script>
+</body>
+</html>
