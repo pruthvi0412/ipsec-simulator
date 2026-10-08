@@ -5,463 +5,680 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>IPsec — Digital Signature Simulator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 /* ── RESET & BASE ── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#f8fafc;--surface:#ffffff;--surface2:#f1f5f9;--surface3:#e2e8f0;
-  --border:#e2e8f0;--border-glow:#86efac44;
-  --text:#0f172a;--text-dim:#475569;--text-muted:#64748b;
-  --cyan:#0284c7;--green:#16a34a;--red:#dc2626;--amber:#d97706;--purple:#7c3aed;
-  --cyan-dim:#e0f2fe;--green-dim:#dcfce7;--red-dim:#fee2e2;
-  --font-mono:'JetBrains Mono',monospace;--font-sans:'Inter',system-ui,sans-serif;
-  --radius:12px;--radius-sm:8px;
+  --bg: #eef7ee; 
+  --surface: #ffffff;
+  --surface-alt: #f6fcf6;
+  --border: #e2e8e4;
+  --text: #2d3748;
+  --text-dim: #718096;
+  --text-muted: #a0aec0;
+  
+  --primary: #c6f6d5; 
+  --primary-text: #22543d;
+  
+  --active-bg: #fed7d7; 
+  --active-text: #742a2a;
+  
+  --green: #48bb78;
+  --red: #f56565;
+  
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-hand: 'Caveat', cursive;
+  
+  --radius-lg: 24px;
+  --radius-md: 16px;
+  --radius-sm: 8px;
 }
 html{scroll-behavior:smooth}
-body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
-body::before{content:'';position:fixed;inset:0;background:
-  radial-gradient(ellipse 80% 50% at 50% -20%,#e0f2fe,transparent),
-  radial-gradient(ellipse 60% 40% at 80% 100%,#f3e8ff,transparent);
-  pointer-events:none;z-index:0}
-
-/* ── ANIMATED GRID BACKGROUND ── */
-.grid-bg{position:fixed;inset:0;z-index:0;overflow:hidden;opacity:.3}
-.grid-bg::before{content:'';position:absolute;inset:-50%;
-  background-image:
-    linear-gradient(#e2e8f0 1px,transparent 1px),
-    linear-gradient(90deg,#e2e8f0 1px,transparent 1px);
-  background-size:60px 60px;
-  animation:gridScroll 60s linear infinite}
-@keyframes gridScroll{to{transform:translate(60px,60px)}}
-
-/* ── LAYOUT ── */
-.app{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:20px 24px 60px}
-
-/* ── HEADER ── */
-.header{text-align:center;padding:40px 0 36px;position:relative}
-.header::after{content:'';display:block;width:120px;height:2px;margin:20px auto 0;
-  background:linear-gradient(90deg,transparent,var(--green),transparent)}
-.logo{display:inline-flex;align-items:center;gap:14px;margin-bottom:8px}
-.logo-icon{width:48px;height:48px;position:relative}
-.logo-icon svg{width:100%;height:100%;filter:drop-shadow(0 0 8px #86efac)}
-.logo h1{font-size:28px;font-weight:700;letter-spacing:-.5px;
-  background:linear-gradient(135deg,#15803d,#16a34a);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.header p{color:var(--text-dim);font-size:14px;margin-top:4px;font-weight:500;letter-spacing:.5px;text-transform:uppercase}
-
-/* ── NAV TABS ── */
-.nav{display:flex;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  padding:4px;margin-bottom:28px;overflow-x:auto;box-shadow:0 1px 3px rgba(0,0,0,0.05)}
-.nav-btn{flex:1;min-width:0;padding:10px 12px;border:none;background:transparent;color:var(--text-dim);
-  font-family:var(--font-sans);font-size:13px;font-weight:600;cursor:pointer;border-radius:var(--radius-sm);
-  transition:all .2s;white-space:nowrap;display:flex;align-items:center;justify-content:center;gap:6px}
-.nav-btn:hover{color:var(--text);background:var(--surface2)}
-.nav-btn.active{background:var(--green-dim);color:var(--green);box-shadow:0 1px 2px rgba(0,0,0,0.05)}
-.nav-btn .icon{font-size:16px;flex-shrink:0}
-
-/* ── PANELS ── */
-.panel{display:none;animation:fadeIn .3s ease}
-.panel.active{display:block}
-@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-
-/* ── CARD ── */
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  overflow:hidden;margin-bottom:20px;transition:border-color .3s;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05),0 2px 4px -1px rgba(0,0,0,0.03)}
-.card:hover{border-color:#cbd5e1}
-.card-head{padding:20px 24px 0;display:flex;align-items:center;gap:10px}
-.card-head .badge{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;
-  font-size:16px;flex-shrink:0}
-.card-head .badge.cyan{background:var(--cyan-dim);color:var(--cyan)}
-.card-head .badge.green{background:var(--green-dim);color:var(--green)}
-.card-head .badge.red{background:var(--red-dim);color:var(--red)}
-.card-head .badge.purple{background:#f3e8ff;color:var(--purple)}
-.card-head h2{font-size:16px;font-weight:700}
-.card-head p{font-size:12px;color:var(--text-muted);margin-top:2px}
-.card-body{padding:20px 24px 24px}
-
-/* ── FORMS ── */
-.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.form-grid.single{grid-template-columns:1fr}
-.form-group{display:flex;flex-direction:column;gap:6px}
-.form-group.full{grid-column:1/-1}
-.form-label{font-size:12px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.8px}
-.form-input{padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);
-  color:var(--text);font-family:var(--font-mono);font-size:14px;transition:all .2s;outline:none;box-shadow:0 1px 2px rgba(0,0,0,0.05) inset}
-.form-input:focus{border-color:var(--green);box-shadow:0 0 0 3px var(--green-dim)}
-.form-input::placeholder{color:var(--text-muted)}
-textarea.form-input{resize:vertical;min-height:80px;font-size:13px}
-
-/* ── BUTTONS ── */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 24px;
-  border:none;border-radius:var(--radius-sm);font-family:var(--font-sans);font-size:14px;font-weight:600;
-  cursor:pointer;transition:all .25s;position:relative;overflow:hidden}
-.btn::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .25s}
-.btn:hover::before{opacity:0.1;background-color:#000}
-.btn:active{transform:scale(.97)}
-.btn-primary{background:linear-gradient(135deg,#bbf7d0,#86efac);color:#14532d;box-shadow:0 4px 12px rgba(134,239,172,0.5);border:1px solid #86efac}
-.btn-primary:hover{box-shadow:0 4px 16px rgba(134,239,172,0.7);background:linear-gradient(135deg,#86efac,#4ade80)}
-.btn-success{background:linear-gradient(135deg,#86efac,#4ade80);color:#14532d;box-shadow:0 4px 12px rgba(74,222,128,0.4)}
-.btn-danger{background:linear-gradient(135deg,#fca5a5,#f87171);color:#7f1d1d;box-shadow:0 4px 12px rgba(248,113,113,0.4)}
-.btn-purple{background:linear-gradient(135deg,#d8b4fe,#c084fc);color:#4c1d95;box-shadow:0 4px 12px rgba(192,132,252,0.4)}
-.btn-ghost{background:var(--surface);color:var(--text-dim);border:1px solid var(--border)}
-.btn-ghost:hover{color:var(--text);border-color:var(--green);background:var(--surface2)}
-.btn-row{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}
-
-/* ── RESULTS ── */
-.result-box{margin-top:20px;border-radius:var(--radius-sm);overflow:hidden;animation:fadeIn .3s;display:none;box-shadow:0 1px 3px rgba(0,0,0,0.1)}
-.result-box.show{display:block}
-.result-header{padding:12px 16px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px}
-.result-header.success{background:#dcfce7;color:var(--green);border-bottom:1px solid #bbf7d0}
-.result-header.error{background:#fee2e2;color:var(--red);border-bottom:1px solid #fecaca}
-.result-header .dot{width:8px;height:8px;border-radius:50%;animation:pulse 2s infinite}
-.result-header.success .dot{background:var(--green)}
-.result-header.error .dot{background:var(--red)}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-.result-body{padding:16px;background:var(--surface);border:1px solid var(--border);border-top:0;
-  border-radius:0 0 var(--radius-sm) var(--radius-sm)}
-.result-row{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);align-items:flex-start}
-.result-row:last-child{border-bottom:none}
-.result-key{font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.5px;
-  min-width:110px;flex-shrink:0;padding-top:2px}
-.result-val{font-family:var(--font-mono);font-size:13px;color:var(--text);word-break:break-all;line-height:1.5}
-.result-val.dim{color:var(--text-dim)}
-.result-val.success-text{color:var(--green)}
-.result-val.error-text{color:var(--red)}
-
-/* ── SA TABLE ── */
-.sa-table{width:100%;border-collapse:collapse;font-size:13px}
-.sa-table th{text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--green);
-  text-transform:uppercase;letter-spacing:.8px;border-bottom:2px solid var(--border);white-space:nowrap}
-.sa-table td{padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:13px}
-.sa-table tr:hover td{background:var(--surface2)}
-.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
-.status-dot.active{background:var(--green);box-shadow:0 0 8px var(--green-dim)}
-.status-dot.expired{background:var(--red);box-shadow:0 0 8px var(--red-dim)}
-.empty-state{text-align:center;padding:40px 20px;color:var(--text-muted)}
-.empty-state .icon{font-size:40px;margin-bottom:12px;opacity:.5}
-.empty-state p{font-size:14px}
-
-/* ── TEST RESULTS ── */
-.test-item{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--surface);
-  border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;box-shadow:0 1px 2px rgba(0,0,0,0.05)}
-.test-icon{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;
-  font-size:14px;font-weight:700;flex-shrink:0}
-.test-icon.pass{background:var(--green-dim);color:var(--green)}
-.test-icon.fail{background:var(--red-dim);color:var(--red)}
-.test-info{flex:1}
-.test-name{font-size:14px;font-weight:600}
-.test-detail{font-size:12px;color:var(--text-dim);margin-top:2px;font-family:var(--font-mono)}
-.test-summary{margin-top:16px;padding:16px;border-radius:var(--radius-sm);text-align:center;font-weight:700;font-size:15px}
-.test-summary.pass{background:var(--green-dim);color:var(--green);border:1px solid #86efac}
-.test-summary.fail{background:var(--red-dim);color:var(--red);border:1px solid #fca5a5}
-
-/* ── SPINNER ── */
-.spinner{display:inline-block;width:16px;height:16px;border:2px solid transparent;border-top-color:currentColor;
-  border-radius:50%;animation:spin .6s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.btn.loading{pointer-events:none;opacity:.7}
-
-/* ── RESPONSIVE ── */
-@media(max-width:640px){
-  .form-grid{grid-template-columns:1fr}
-  .nav{flex-wrap:wrap}
-  .nav-btn{font-size:12px;padding:8px}
-  .app{padding:12px 12px 40px}
+body{
+  font-family: var(--font-sans);
+  background-color: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  line-height: 1.5;
 }
+
+body::before, body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+}
+body::before {
+  background: radial-gradient(circle at 15% 50%, rgba(198, 246, 213, 0.6), transparent 50%),
+              radial-gradient(circle at 85% 30%, rgba(254, 235, 200, 0.4), transparent 50%);
+}
+body::after {
+  background: radial-gradient(circle at 50% 100%, rgba(254, 215, 215, 0.4), transparent 50%);
+}
+
+.top-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: var(--surface);
+  border-radius: 999px;
+  margin: 16px 24px;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -1px rgba(0,0,0,0.02);
+  border: 1px solid var(--border);
+}
+
+.nav-links { display: flex; gap: 8px; }
+.nav-links a {
+  text-decoration: none;
+  color: var(--text-dim);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: 999px;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+.nav-links a:hover { color: var(--text); background: var(--surface-alt); }
+.nav-links a.active { background: var(--active-bg); color: var(--active-text); }
+
+.nav-title {
+  font-weight: 700;
+  color: #1a202c;
+  font-size: 15px;
+  letter-spacing: -0.2px;
+}
+
+.container { max-width: 1300px; margin: 0 auto; padding: 24px; }
+
+.page-header { margin-bottom: 40px; padding: 0 12px; }
+.breadcrumbs {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.main-title {
+  font-size: 36px;
+  font-weight: 800;
+  color: #111827;
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 12px;
+  letter-spacing: -1px;
+}
+.badge-hand {
+  font-family: var(--font-hand);
+  color: #9b2c2c;
+  font-size: 28px;
+  font-weight: 600;
+  transform: rotate(-5deg);
+  margin-top: 6px;
+}
+.subtitle {
+  font-size: 15px;
+  color: var(--text-dim);
+  max-width: 600px;
+  line-height: 1.6;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 32px;
+}
+
+.sidebar {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.02);
+  align-self: start;
+}
+.sidebar-section {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin: 16px 0 8px 16px;
+}
+.nav-btn {
+  background: transparent;
+  border: none;
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-dim);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.nav-btn:hover { background: var(--surface-alt); color: var(--text); }
+.nav-btn.active {
+  background: var(--active-bg);
+  color: var(--active-text);
+  font-weight: 600;
+}
+.nav-btn .dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--active-text); opacity: 0;
+}
+.nav-btn.active .dot { opacity: 1; }
+
+.panel { display: none; animation: fadeUp 0.4s ease; }
+.panel.active { display: block; }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  margin-bottom: 24px;
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.02), 0 8px 10px -6px rgba(0,0,0,0.01);
+}
+.card-header {
+  display: flex; align-items: center; gap: 16px; margin-bottom: 24px;
+}
+.card-icon {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.card-icon.red { background: var(--active-bg); color: var(--active-text); }
+.card-icon.green { background: #c6f6d5; color: #22543d; }
+.card-icon.blue { background: #bee3f8; color: #2a4365; }
+.card-title h2 { font-size: 20px; font-weight: 600; color: #1a202c; letter-spacing: -0.3px; }
+.card-title p { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+
+/* Readonly Content Styles */
+.content-prose h3 { font-size: 18px; font-weight: 600; color: #1a202c; margin: 24px 0 12px; }
+.content-prose h3:first-child { margin-top: 0; }
+.content-prose p { font-size: 15px; color: var(--text-dim); margin-bottom: 16px; line-height: 1.6; }
+.content-prose ul { margin-left: 20px; color: var(--text-dim); margin-bottom: 16px; }
+.content-prose li { margin-bottom: 8px; }
+.code-block {
+  background: #1e1e1e; color: #d4d4d4; padding: 20px; border-radius: var(--radius-md);
+  font-family: var(--font-mono); font-size: 13px; overflow-x: auto; line-height: 1.5;
+}
+.terminal-block {
+  background: #0f172a; color: #38bdf8; padding: 20px; border-radius: var(--radius-md);
+  font-family: var(--font-mono); font-size: 13px; overflow-x: auto; line-height: 1.5;
+}
+
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.form-grid.single { grid-template-columns: 1fr; }
+.form-group { display: flex; flex-direction: column; gap: 8px; }
+.form-label {
+  font-size: 12px; font-weight: 600; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.form-input {
+  padding: 12px 16px; background: var(--surface-alt); border: 1px solid var(--border);
+  border-radius: var(--radius-md); font-family: var(--font-mono);
+  font-size: 14px; color: var(--text); outline: none; transition: border-color 0.2s;
+}
+.form-input:focus { border-color: var(--active-bg); }
+textarea.form-input { resize: vertical; min-height: 100px; }
+
+.btn {
+  padding: 12px 24px; border: none; border-radius: 999px;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: transform 0.1s, opacity 0.2s;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.btn:hover { opacity: 0.9; transform: translateY(-1px); }
+.btn:active { transform: translateY(1px); }
+.btn-primary { background: var(--active-bg); color: var(--active-text); }
+.btn-danger { background: var(--active-bg); color: var(--active-text); }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.btn.loading { opacity: 0.7; pointer-events: none; }
+.spinner {
+  display: inline-block; width: 14px; height: 14px; border: 2px solid transparent; border-top-color: currentColor;
+  border-radius: 50%; animation: spin 0.6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.result-box {
+  margin-top: 24px; padding: 24px; background: var(--surface-alt); border-radius: var(--radius-md);
+  border: 1px solid var(--border); display: none;
+}
+.result-box.show { display: block; }
+.result-header { font-size: 14px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.result-header.success { color: var(--green); }
+.result-header.error { color: var(--red); }
+.result-row { display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px dashed var(--border); }
+.result-row:last-child { border-bottom: none; }
+.result-key { font-size: 12px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; width: 120px; flex-shrink: 0; padding-top: 2px; }
+.result-val { font-family: var(--font-mono); font-size: 14px; color: var(--text); word-break: break-all; }
+.success-text { color: var(--green); font-weight: 500; }
+.error-text { color: var(--red); font-weight: 500; }
+
+.sa-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.sa-table th { text-align: left; padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; border-bottom: 2px solid var(--border); }
+.sa-table td { padding: 12px 16px; border-bottom: 1px solid var(--border); font-family: var(--font-mono); }
+.status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; }
+.status-dot.active { background: var(--green); }
+.status-dot.expired { background: var(--red); }
+
+.test-item { display: flex; align-items: center; gap: 16px; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); margin-bottom: 12px; }
+.test-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; }
+.test-icon.pass { background: #c6f6d5; color: var(--green); }
+.test-icon.fail { background: #fed7d7; color: var(--red); }
+.test-name { font-weight: 600; font-size: 15px; }
+.test-detail { font-size: 13px; color: var(--text-dim); font-family: var(--font-mono); margin-top: 4px; }
 </style>
 </head>
 <body>
 
-<div class="grid-bg"></div>
+<nav class="top-nav">
+  <div class="nav-links">
+    <a id="topHome" class="active">Home</a>
+    <a id="topSimulator">Simulator</a>
+  </div>
+  <div class="nav-title">
+    IPsec-Digital Signature Simulator
+  </div>
+</nav>
 
-<div class="app">
-  <!-- HEADER -->
-  <header class="header">
-    <div class="logo">
-      <div class="logo-icon">
-        <svg viewBox="0 0 48 48" fill="none"><rect x="6" y="20" width="36" height="24" rx="4" stroke="#00d4ff" stroke-width="2.5"/>
-        <path d="M16 20v-6a8 8 0 1 1 16 0v6" stroke="#a855f7" stroke-width="2.5" stroke-linecap="round"/>
-        <circle cx="24" cy="32" r="3" fill="#00d4ff"/><path d="M24 35v4" stroke="#00d4ff" stroke-width="2.5" stroke-linecap="round"/></svg>
-      </div>
-      <div>
-        <h1>IPsec Simulator</h1>
-        <p>Digital Signature &amp; Encryption Lab</p>
-      </div>
-    </div>
+<div class="container">
+  <header class="page-header">
+    <div class="breadcrumbs">COMPUTER SCIENCE & ENGINEERING > CRYPTOGRAPHY</div>
+    <h1 class="main-title">IPsec-Digital Signature Simulator</h1>
+    <p class="subtitle">Explore the foundational principles of secret-key cryptography and digital signatures through a step-by-step interactive IPsec model and simulation environment.</p>
   </header>
 
-  <!-- NAVIGATION -->
-  <nav class="nav" id="nav">
-    <button class="nav-btn active" data-tab="sa"><span class="icon">🔑</span>Manage SA</button>
-    <button class="nav-btn" data-tab="encrypt"><span class="icon">🔒</span>Encrypt &amp; Sign</button>
-    <button class="nav-btn" data-tab="decrypt"><span class="icon">🔓</span>Decrypt &amp; Verify</button>
-    <button class="nav-btn" data-tab="tamper"><span class="icon">⚠️</span>Tamper Test</button>
-    <button class="nav-btn" data-tab="database"><span class="icon">🗄️</span>SA Database</button>
-    <button class="nav-btn" data-tab="tests"><span class="icon">🧪</span>Run Tests</button>
-  </nav>
+  <div class="layout">
+    
+    <aside class="sidebar" id="nav">
+      <!-- Docs Section -->
+      <button class="nav-btn active" data-tab="intro">Introduction <div class="dot"></div></button>
+      <button class="nav-btn" data-tab="objective">Objective <div class="dot"></div></button>
+      <button class="nav-btn" data-tab="theory">Theory <div class="dot"></div></button>
+      
+      <!-- Simulator Section -->
+      <div class="sidebar-section">Simulator</div>
+      <button class="nav-btn" data-tab="sa">Manage SA <div class="dot"></div></button>
+      <button class="nav-btn" data-tab="encrypt">Encrypt & Sign <div class="dot"></div></button>
+      <button class="nav-btn" data-tab="decrypt">Decrypt & Verify <div class="dot"></div></button>
+      <button class="nav-btn" data-tab="tamper">Tamper Test <div class="dot"></div></button>
+      <button class="nav-btn" data-tab="database">SA Database <div class="dot"></div></button>
+      <button class="nav-btn" data-tab="tests">Run Tests <div class="dot"></div></button>
 
-  <!-- ════════ PANEL: MANAGE SA ════════ -->
-  <section class="panel active" id="panel-sa">
-    <!-- Add SA -->
-    <div class="card">
-      <div class="card-head"><div class="badge cyan">+</div><div><h2>Create Security Association</h2><p>Add a new SA entry to the Security Association Database</p></div></div>
-      <div class="card-body">
-        <div class="form-grid">
-          <div class="form-group">
-            <label class="form-label">SPI (Security Parameters Index)</label>
-            <input class="form-input" type="number" id="addSpi" placeholder="1001">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Lifetime (seconds)</label>
-            <input class="form-input" type="number" id="addLifetime" value="3600" placeholder="3600">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Source IP Address</label>
-            <input class="form-input" type="text" id="addSource" placeholder="192.168.1.10">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Destination IP Address</label>
-            <input class="form-input" type="text" id="addDest" placeholder="192.168.1.20">
-          </div>
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-primary" id="btnAddSa">🔑 Create SA</button>
-        </div>
-        <div class="result-box" id="resultAddSa"></div>
-      </div>
-    </div>
+      <!-- Results Section -->
+      <div class="sidebar-section">Experiment Details</div>
+      <button class="nav-btn" data-tab="program">Program <div class="dot"></div></button>
+      <button class="nav-btn" data-tab="output">Output <div class="dot"></div></button>
+      <button class="nav-btn" data-tab="result">Result <div class="dot"></div></button>
+    </aside>
 
-    <!-- Lookup SA -->
-    <div class="card">
-      <div class="card-head"><div class="badge green">?</div><div><h2>Lookup SA Status</h2><p>Check if a Security Association is active or expired</p></div></div>
-      <div class="card-body">
-        <div class="form-grid single">
-          <div class="form-group">
-            <label class="form-label">SPI</label>
-            <input class="form-input" type="number" id="getSpi" placeholder="1001">
-          </div>
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-primary" id="btnGetSa">🔍 Lookup</button>
-        </div>
-        <div class="result-box" id="resultGetSa"></div>
-      </div>
-    </div>
+    <main class="content">
 
-    <!-- Delete SA -->
-    <div class="card">
-      <div class="card-head"><div class="badge red">✕</div><div><h2>Delete Security Association</h2><p>Remove an SA entry from the database</p></div></div>
-      <div class="card-body">
-        <div class="form-grid single">
-          <div class="form-group">
-            <label class="form-label">SPI</label>
-            <input class="form-input" type="number" id="delSpi" placeholder="1001">
+      <!-- PANEL: INTRO -->
+      <div id="panel-intro" class="panel active">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon red">ℹ️</div>
+            <div class="card-title"><h2>Introduction to IPsec & Digital Signatures</h2></div>
           </div>
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-danger" id="btnDelSa">🗑️ Delete SA</button>
-        </div>
-        <div class="result-box" id="resultDelSa"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ════════ PANEL: ENCRYPT ════════ -->
-  <section class="panel" id="panel-encrypt">
-    <div class="card">
-      <div class="card-head"><div class="badge cyan">🔒</div><div><h2>Encrypt &amp; Sign Message</h2><p>AES-256-CBC encryption with RSA-PSS-SHA256 digital signature</p></div></div>
-      <div class="card-body">
-        <div class="form-grid">
-          <div class="form-group">
-            <label class="form-label">SPI</label>
-            <input class="form-input" type="number" id="encSpi" placeholder="1001">
+          <div class="content-prose">
+            <p>Internet Protocol Security (IPsec) is a secure network protocol suite that authenticates and encrypts the packets of data to provide secure encrypted communication between two computers over an Internet Protocol network.</p>
+            <p>This simulator focuses on the integration of <strong>symmetric encryption</strong> (for confidentiality) and <strong>asymmetric digital signatures</strong> (for authentication and integrity) within an IPsec Security Association context.</p>
           </div>
-          <div class="form-group">
-            <label class="form-label">Plaintext Message</label>
-            <input class="form-input" type="text" id="encText" placeholder="HELLO BOB">
-          </div>
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-primary" id="btnEncrypt">🔒 Encrypt &amp; Sign</button>
-        </div>
-        <div class="result-box" id="resultEncrypt"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ════════ PANEL: DECRYPT ════════ -->
-  <section class="panel" id="panel-decrypt">
-    <div class="card">
-      <div class="card-head"><div class="badge green">🔓</div><div><h2>Decrypt &amp; Verify Signature</h2><p>Verify RSA-PSS-SHA256 signature then decrypt AES-256-CBC ciphertext</p></div></div>
-      <div class="card-body">
-        <div class="form-grid single">
-          <div class="form-group">
-            <label class="form-label">SPI</label>
-            <input class="form-input" type="number" id="decSpi" placeholder="1001">
-          </div>
-          <div class="form-group">
-            <label class="form-label">IV (hex)</label>
-            <input class="form-input" type="text" id="decIv" placeholder="Paste IV hex from encryption result">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Ciphertext (hex)</label>
-            <textarea class="form-input" id="decCt" placeholder="Paste ciphertext hex from encryption result"></textarea>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Signature (hex)</label>
-            <textarea class="form-input" id="decSig" placeholder="Paste signature hex from encryption result"></textarea>
-          </div>
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-success" id="btnDecrypt">🔓 Decrypt &amp; Verify</button>
-        </div>
-        <div class="result-box" id="resultDecrypt"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ════════ PANEL: TAMPER TEST ════════ -->
-  <section class="panel" id="panel-tamper">
-    <div class="card">
-      <div class="card-head"><div class="badge red">⚠️</div><div><h2>Integrity Tamper Test</h2><p>Encrypt a message, tamper with the ciphertext, and verify that the digital signature detects the modification</p></div></div>
-      <div class="card-body">
-        <div class="form-grid">
-          <div class="form-group">
-            <label class="form-label">SPI</label>
-            <input class="form-input" type="number" id="tampSpi" placeholder="1001">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Test Message</label>
-            <input class="form-input" type="text" id="tampText" value="HELLO BOB" placeholder="HELLO BOB">
-          </div>
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-danger" id="btnTamper">⚠️ Run Tamper Test</button>
-        </div>
-        <div class="result-box" id="resultTamper"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ════════ PANEL: DATABASE ════════ -->
-  <section class="panel" id="panel-database">
-    <div class="card">
-      <div class="card-head"><div class="badge purple">🗄️</div><div><h2>Security Association Database</h2><p>All SA entries currently stored in the SAD</p></div></div>
-      <div class="card-body">
-        <div class="btn-row" style="margin-top:0;margin-bottom:16px">
-          <button class="btn btn-primary" id="btnRefreshDb">🔄 Refresh</button>
-        </div>
-        <div id="saTableContainer">
-          <div class="empty-state"><div class="icon">🗄️</div><p>No Security Associations found. Create one first.</p></div>
         </div>
       </div>
-    </div>
-  </section>
 
-  <!-- ════════ PANEL: TESTS ════════ -->
-  <section class="panel" id="panel-tests">
-    <div class="card">
-      <div class="card-head"><div class="badge purple">🧪</div><div><h2>Automated Test Suite</h2><p>Run all 6 test cases — SA lifecycle, encryption, decryption, authentication, tamper detection, and expiration</p></div></div>
-      <div class="card-body">
-        <div class="btn-row" style="margin-top:0">
-          <button class="btn btn-purple" id="btnRunTests">🧪 Run All Tests</button>
+      <!-- PANEL: OBJECTIVE -->
+      <div id="panel-objective" class="panel">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon blue">🎯</div>
+            <div class="card-title"><h2>Experiment Objective</h2></div>
+          </div>
+          <div class="content-prose">
+            <p>The primary objectives of this experiment are:</p>
+            <ul>
+              <li>To understand the concept of a Security Association (SA) and its role in IPsec.</li>
+              <li>To implement a simulation model of symmetric key cryptography (AES-256) for data confidentiality.</li>
+              <li>To integrate RSA digital signatures to guarantee data authenticity and non-repudiation.</li>
+              <li>To practically observe how digital signatures detect packet tampering (Man-in-the-Middle attacks).</li>
+            </ul>
+          </div>
         </div>
-        <div id="testResults" style="margin-top:20px"></div>
       </div>
-    </div>
-  </section>
+
+      <!-- PANEL: THEORY -->
+      <div id="panel-theory" class="panel">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon green">📚</div>
+            <div class="card-title"><h2>Theoretical Background</h2></div>
+          </div>
+          <div class="content-prose">
+            <h3>Security Association (SA)</h3>
+            <p>An SA is a simplex logical connection that provides security to the data carried by it. It is uniquely identified by a Security Parameter Index (SPI), an IP Destination Address, and a security protocol identifier.</p>
+            <h3>Symmetric Encryption (AES-256-CBC)</h3>
+            <p>Advanced Encryption Standard (AES) is a symmetric block cipher chosen by the U.S. government to protect classified information. In CBC (Cipher Block Chaining) mode, each plaintext block is XORed with the previous ciphertext block before being encrypted.</p>
+            <h3>Digital Signatures (RSA-PSS-SHA256)</h3>
+            <p>A digital signature is a mathematical scheme for verifying the authenticity of digital messages or documents. A valid digital signature gives a recipient strong reason to believe that the message was created by a known sender and that the message was not altered in transit.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- PANEL: SA -->
+      <div id="panel-sa" class="panel">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon red">➕</div>
+            <div class="card-title"><h2>Create Security Association</h2><p>Add a new SA entry to the Security Association Database</p></div>
+          </div>
+          <div class="form-grid">
+            <div class="form-group"><label class="form-label">SPI</label><input type="number" id="addSpi" class="form-input" placeholder="e.g. 1001" value="1001"></div>
+            <div class="form-group"><label class="form-label">Lifetime (s)</label><input type="number" id="addLife" class="form-input" value="3600"></div>
+            <div class="form-group"><label class="form-label">Source IP</label><input type="text" id="addSrc" class="form-input" value="192.168.1.10"></div>
+            <div class="form-group"><label class="form-label">Destination IP</label><input type="text" id="addDest" class="form-input" value="192.168.1.20"></div>
+          </div>
+          <button class="btn btn-primary" id="btnAddSa" style="margin-top: 24px;">🔑 Create SA</button>
+          <div id="resultAddSa" class="result-box"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon red">❓</div>
+            <div class="card-title"><h2>Lookup SA Status</h2><p>Check if a Security Association is active</p></div>
+          </div>
+          <div class="form-group"><label class="form-label">SPI</label><input type="number" id="getSpi" class="form-input" value="1001"></div>
+          <button class="btn btn-primary" id="btnGetSa" style="margin-top: 24px;">🔍 Lookup</button>
+          <div id="resultGetSa" class="result-box"></div>
+        </div>
+        
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon red">❌</div>
+            <div class="card-title"><h2>Delete SA</h2><p>Remove an association from the SAD</p></div>
+          </div>
+          <div class="form-group"><label class="form-label">SPI</label><input type="number" id="delSpi" class="form-input" value="1001"></div>
+          <button class="btn btn-danger" id="btnDelSa" style="margin-top: 24px;">🗑 Delete</button>
+          <div id="resultDelSa" class="result-box"></div>
+        </div>
+      </div>
+
+      <!-- PANEL: ENCRYPT -->
+      <div id="panel-encrypt" class="panel">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon red">🔒</div>
+            <div class="card-title"><h2>Encrypt & Sign Data</h2><p>Secure a payload using an active Security Association</p></div>
+          </div>
+          <div class="form-grid single">
+            <div class="form-group"><label class="form-label">SPI</label><input type="number" id="encSpi" class="form-input" value="1001"></div>
+            <div class="form-group"><label class="form-label">Plaintext Message</label><textarea id="encText" class="form-input" placeholder="Enter secret data...">CONFIDENTIAL: Launch sequence activated.</textarea></div>
+          </div>
+          <button class="btn btn-primary" id="btnEncrypt" style="margin-top: 24px;">🔒 Encrypt & Sign</button>
+          <div id="resultEncrypt" class="result-box"></div>
+        </div>
+      </div>
+
+      <!-- PANEL: DECRYPT -->
+      <div id="panel-decrypt" class="panel">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon red">🔓</div>
+            <div class="card-title"><h2>Decrypt & Verify Data</h2><p>Authenticate and decrypt incoming payload</p></div>
+          </div>
+          <div class="form-grid single">
+            <div class="form-group"><label class="form-label">SPI</label><input type="number" id="decSpi" class="form-input"></div>
+            <div class="form-group"><label class="form-label">Initialization Vector (IV)</label><input type="text" id="decIv" class="form-input"></div>
+            <div class="form-group"><label class="form-label">Ciphertext (Hex)</label><textarea id="decCt" class="form-input"></textarea></div>
+            <div class="form-group"><label class="form-label">Digital Signature (Hex)</label><textarea id="decSig" class="form-input"></textarea></div>
+          </div>
+          <button class="btn btn-primary" id="btnDecrypt" style="margin-top: 24px;">🔓 Verify & Decrypt</button>
+          <div id="resultDecrypt" class="result-box"></div>
+        </div>
+      </div>
+
+      <!-- PANEL: TAMPER -->
+      <div id="panel-tamper" class="panel">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon red">⚠️</div>
+            <div class="card-title"><h2>Tamper Test (Man-in-the-Middle)</h2><p>Simulate an attacker altering the ciphertext in transit</p></div>
+          </div>
+          <div class="form-grid single">
+            <div class="form-group"><label class="form-label">SPI</label><input type="number" id="tampSpi" class="form-input" value="1001"></div>
+            <div class="form-group"><label class="form-label">Message Payload</label><textarea id="tampText" class="form-input">TRANSFER $10,000 TO ACCOUNT B</textarea></div>
+          </div>
+          <button class="btn btn-danger" id="btnTamper" style="margin-top: 24px;">⚠️ Execute Tamper Test</button>
+          <div id="resultTamper" class="result-box"></div>
+        </div>
+      </div>
+
+      <!-- PANEL: DB -->
+      <div id="panel-database" class="panel">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon red">🗄️</div>
+            <div class="card-title"><h2>Security Association Database</h2><p>Live view of all established tunnels</p></div>
+            <button class="btn btn-outline" id="btnRefreshDb" style="margin-left: auto;">🔄 Refresh</button>
+          </div>
+          <div id="saTableContainer" style="margin-top: 20px;">
+            <div style="text-align:center;padding:40px;color:var(--text-muted)">Click refresh to load database.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PANEL: TESTS -->
+      <div id="panel-tests" class="panel">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon red">🧪</div>
+            <div class="card-title"><h2>Automated Test Suite</h2><p>Run cryptographic validation tests</p></div>
+            <button class="btn btn-primary" id="btnRunTests" style="margin-left: auto;">▶ Run Tests</button>
+          </div>
+          <div id="testResults" style="margin-top: 20px;"></div>
+        </div>
+      </div>
+
+      <!-- PANEL: PROGRAM -->
+      <div id="panel-program" class="panel">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon blue">💻</div>
+            <div class="card-title"><h2>Source Code</h2><p>Core cryptographic algorithms used in the simulation</p></div>
+          </div>
+          <pre class="code-block"><code>def encrypt(sa, text):
+    iv = os.urandom(16)
+    data = text.encode()
+    pad = 16 - len(data) % 16
+    data += bytes([pad]) * pad
+    
+    # Encrypt Data
+    e = Cipher(algorithms.AES(sa["enc_key"]), modes.CBC(iv)).encryptor()
+    cipher = e.update(data) + e.finalize()
+    
+    # Digitally Sign Data
+    sig = sa["private_key"].sign(
+        iv + cipher,
+        padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+        hashes.SHA256()
+    )
+    return iv, cipher, sig
+
+def decrypt(sa, iv, cipher, sig):
+    # Authenticate Data (Verify Signature)
+    sa["public_key"].verify(
+        sig, iv + cipher,
+        padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+        hashes.SHA256()
+    )
+    
+    # Decrypt Data
+    d = Cipher(algorithms.AES(sa["enc_key"]), modes.CBC(iv)).decryptor()
+    data = d.update(cipher) + d.finalize()
+    pad = data[-1]
+    return data[:-pad].decode()</code></pre>
+        </div>
+      </div>
+
+      <!-- PANEL: OUTPUT -->
+      <div id="panel-output" class="panel">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon blue">🖥️</div>
+            <div class="card-title"><h2>Terminal Output</h2><p>Simulation execution trace</p></div>
+          </div>
+          <pre class="terminal-block"><code>$ python3 ipsec_core.py
+==================================================================
+SECURITY ASSOCIATION DATABASE - TEST SUITE
+==================================================================
+
+[Test Case 1] SA creation and SPI lookup
+  SPI: 1001
+  Result: PASS - SA FOUND
+
+[Test Case 2] AES-256 encryption and decryption
+  Plaintext : HELLO BOB
+  Ciphertext: 1c85619f30cc46926acd083c6e04fc91
+  Decrypted : HELLO BOB
+  Result    : PASS
+
+[Test Case 3] RSA-PSS-SHA256 digital signature authentication
+  Signature: 57a0d824861fe0f...
+  Result: PASS - AUTHENTICATION SUCCESSFUL
+
+[Test Case 4] Tampered ciphertext
+  Result: PASS - TAMPERING DETECTED (Signature Invalid)
+
+[Test Case 5] Expired Security Association
+  SPI: 1002, Lifetime: 0 seconds
+  Result: PASS - EXPIRED SA REJECTED
+
+==================================================================
+ALL TEST CASES PASSED
+==================================================================</code></pre>
+        </div>
+      </div>
+
+      <!-- PANEL: RESULT -->
+      <div id="panel-result" class="panel">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon green">✅</div>
+            <div class="card-title"><h2>Experiment Result & Verification</h2></div>
+          </div>
+          <div class="content-prose">
+            <p><strong>Result:</strong> The IPsec security model with Digital Signatures was successfully implemented and verified.</p>
+            <p><strong>Verification:</strong> The simulation successfully demonstrated:</p>
+            <ul>
+              <li>Establishment and management of Security Associations (SAs) using SPIs.</li>
+              <li>Secure data encryption ensuring confidentiality via the AES-256-CBC algorithm.</li>
+              <li>Authenticity and integrity verification using robust RSA-PSS-SHA256 digital signatures.</li>
+              <li>Immediate failure of decryption upon detection of packet tampering, successfully mitigating simulated Man-in-the-Middle (MitM) attacks.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
 </div>
 
 <script>
-// ── Tab Navigation ──
-document.querySelectorAll('.nav-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
-    if (btn.dataset.tab === 'database') refreshDb();
+const truncHex = hex => hex.length > 64 ? hex.substring(0,64) + '...' : hex;
+const apiPost = async (url, data) => { const r = await fetch(url, { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) }); return r.json(); };
+const apiGet = async (url) => { const r = await fetch(url); return r.json(); };
+const setLoading = (btn, isL) => { if(isL){ btn.dataset.txt=btn.innerHTML; btn.innerHTML='<span class="spinner"></span> Working...'; btn.classList.add('loading'); } else { btn.innerHTML=btn.dataset.txt; btn.classList.remove('loading'); }};
+
+function showResult(boxId, type, rows) {
+  const box = document.getElementById(boxId);
+  let html = `<div class="result-header ${type}">${type === 'success' ? '✓ Operation Successful' : '✗ Operation Failed'}</div>`;
+  rows.forEach(r => {
+    html += `<div class="result-row"><div class="result-key">${r[0]}</div><div class="result-val ${r[2]||''}">${r[1]}</div></div>`;
   });
+  box.innerHTML = html; box.classList.add('show');
+}
+function showError(boxId, msg) { showResult(boxId, 'error', [['Error', msg, 'error-text']]); }
+
+// UI Navigation logic
+const topHome = document.getElementById('topHome');
+const topSimulator = document.getElementById('topSimulator');
+const allNavBtns = document.querySelectorAll('.nav-btn');
+const allPanels = document.querySelectorAll('.panel');
+
+function switchTab(tabId) {
+  allNavBtns.forEach(b => b.classList.remove('active'));
+  allPanels.forEach(p => p.classList.remove('active'));
+  
+  const targetBtn = document.querySelector(`.nav-btn[data-tab="${tabId}"]`);
+  if(targetBtn) targetBtn.classList.add('active');
+  
+  const targetPanel = document.getElementById('panel-' + tabId);
+  if(targetPanel) targetPanel.classList.add('active');
+  
+  if(tabId === 'database') document.getElementById('btnRefreshDb').click();
+  
+  // Update Top Nav
+  if (['intro', 'objective', 'theory'].includes(tabId)) {
+    topHome.classList.add('active');
+    topSimulator.classList.remove('active');
+  } else {
+    topHome.classList.remove('active');
+    topSimulator.classList.add('active');
+  }
+}
+
+allNavBtns.forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
 });
 
-// ── Helpers ──
-async function apiPost(url, body) {
-  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  return res.json();
-}
-async function apiGet(url) { return (await fetch(url)).json(); }
+topHome.addEventListener('click', () => switchTab('intro'));
+topSimulator.addEventListener('click', () => switchTab('sa'));
 
-function setLoading(btn, loading) {
-  if (loading) { btn.dataset.origHtml = btn.innerHTML; btn.innerHTML = '<span class="spinner"></span> Processing...'; btn.classList.add('loading'); }
-  else { btn.innerHTML = btn.dataset.origHtml; btn.classList.remove('loading'); }
-}
 
-function showResult(id, status, rows) {
-  const box = document.getElementById(id);
-  const isOk = status === 'success';
-  let html = `<div class="result-header ${isOk ? 'success' : 'error'}"><span class="dot"></span>${isOk ? 'Operation Successful' : 'Error'}</div><div class="result-body">`;
-  rows.forEach(([k, v, cls]) => {
-    html += `<div class="result-row"><span class="result-key">${k}</span><span class="result-val ${cls || ''}">${v}</span></div>`;
-  });
-  html += '</div>';
-  box.innerHTML = html;
-  box.classList.add('show');
-}
-
-function showError(id, msg) {
-  showResult(id, 'error', [['Error', msg, 'error-text']]);
-}
-
-function truncHex(hex, len = 64) {
-  return hex.length > len ? hex.slice(0, len) + '…' : hex;
-}
-
-// ── Add SA ──
+// API Logic
 document.getElementById('btnAddSa').addEventListener('click', async function() {
   const spi = document.getElementById('addSpi').value;
-  const source = document.getElementById('addSource').value;
+  const source = document.getElementById('addSrc').value;
   const dest = document.getElementById('addDest').value;
-  const lifetime = document.getElementById('addLifetime').value;
-  if (!spi || !source || !dest) return showError('resultAddSa', 'Please fill all required fields.');
+  const lifetime = document.getElementById('addLife').value;
+  if (!spi || !source || !dest) return showError('resultAddSa', 'SPI, Source, and Destination are required.');
   setLoading(this, true);
   try {
     const j = await apiPost('/api/add_sa', { spi, source, destination: dest, lifetime });
-    if (j.status === 'success') {
-      showResult('resultAddSa', 'success', [
-        ['Status', 'SA Created Successfully', 'success-text'],
-        ['SPI', spi], ['Source', source], ['Destination', dest],
-        ['Encryption', 'AES-256-CBC'], ['Authentication', 'RSA-PSS-SHA256'],
-        ['Lifetime', lifetime + ' seconds']
-      ]);
-    } else showError('resultAddSa', j.message);
+    if (j.status === 'success') showResult('resultAddSa', 'success', [['Status', 'SA Created', 'success-text'], ['SPI', spi], ['Source', source], ['Destination', dest], ['Encryption', 'AES-256-CBC'], ['Authentication', 'RSA-PSS-SHA256']]);
+    else showError('resultAddSa', j.message);
   } catch(e) { showError('resultAddSa', e.message); }
   setLoading(this, false);
 });
 
-// ── Lookup SA ──
 document.getElementById('btnGetSa').addEventListener('click', async function() {
   const spi = document.getElementById('getSpi').value;
-  if (!spi) return showError('resultGetSa', 'Enter an SPI.');
   setLoading(this, true);
   try {
     const j = await apiPost('/api/get_sa', { spi });
-    if (j.status === 'success') {
-      const sa = j.sa;
-      showResult('resultGetSa', 'success', [
-        ['Status', sa.active ? '● Active' : '● Expired', sa.active ? 'success-text' : 'error-text'],
-        ['SPI', sa.spi], ['Source', sa.source], ['Destination', sa.destination],
-        ['Encryption', sa.encryption], ['Authentication', sa.authentication],
-        ['Remaining', sa.remaining + 's / ' + sa.lifetime + 's']
-      ]);
-    } else showError('resultGetSa', j.message);
+    if (j.status === 'success') showResult('resultGetSa', 'success', [['Status', j.sa.active ? '● Active' : '● Expired', j.sa.active?'success-text':'error-text'], ['SPI', j.sa.spi], ['Source', j.sa.source], ['Destination', j.sa.destination], ['Remaining', j.sa.remaining + 's']]);
+    else showError('resultGetSa', j.message);
   } catch(e) { showError('resultGetSa', e.message); }
   setLoading(this, false);
 });
 
-// ── Delete SA ──
 document.getElementById('btnDelSa').addEventListener('click', async function() {
   const spi = document.getElementById('delSpi').value;
-  if (!spi) return showError('resultDelSa', 'Enter an SPI.');
   setLoading(this, true);
   try {
     const j = await apiPost('/api/delete_sa', { spi });
@@ -471,124 +688,60 @@ document.getElementById('btnDelSa').addEventListener('click', async function() {
   setLoading(this, false);
 });
 
-// ── Encrypt ──
 document.getElementById('btnEncrypt').addEventListener('click', async function() {
   const spi = document.getElementById('encSpi').value;
   const text = document.getElementById('encText').value;
-  if (!spi || !text) return showError('resultEncrypt', 'Enter SPI and message.');
   setLoading(this, true);
   try {
     const j = await apiPost('/api/encrypt', { spi, text });
     if (j.status === 'success') {
-      showResult('resultEncrypt', 'success', [
-        ['Plaintext', j.plaintext],
-        ['Algorithm', j.algorithm],
-        ['Auth Method', j.auth_method],
-        ['IV', `<span title="${j.iv}" style="cursor:help">${j.iv}</span>`],
-        ['Ciphertext', `<span title="${j.ciphertext}" style="cursor:help">${truncHex(j.ciphertext)}</span>`],
-        ['Signature', `<span title="${j.signature}" style="cursor:help">${truncHex(j.signature)}</span>`]
-      ]);
-      // Auto-fill decrypt panel
-      document.getElementById('decSpi').value = spi;
-      document.getElementById('decIv').value = j.iv;
-      document.getElementById('decCt').value = j.ciphertext;
-      document.getElementById('decSig').value = j.signature;
+      showResult('resultEncrypt', 'success', [['IV', j.iv], ['Ciphertext', truncHex(j.ciphertext)], ['Signature', truncHex(j.signature)]]);
+      document.getElementById('decSpi').value = spi; document.getElementById('decIv').value = j.iv; document.getElementById('decCt').value = j.ciphertext; document.getElementById('decSig').value = j.signature;
     } else showError('resultEncrypt', j.message);
   } catch(e) { showError('resultEncrypt', e.message); }
   setLoading(this, false);
 });
 
-// ── Decrypt ──
 document.getElementById('btnDecrypt').addEventListener('click', async function() {
-  const spi = document.getElementById('decSpi').value;
-  const iv = document.getElementById('decIv').value.trim();
-  const ct = document.getElementById('decCt').value.trim();
-  const sig = document.getElementById('decSig').value.trim();
-  if (!spi || !iv || !ct || !sig) return showError('resultDecrypt', 'All fields are required.');
+  const spi = document.getElementById('decSpi').value, iv = document.getElementById('decIv').value, ct = document.getElementById('decCt').value, sig = document.getElementById('decSig').value;
   setLoading(this, true);
   try {
     const j = await apiPost('/api/decrypt', { spi, iv, ciphertext: ct, signature: sig });
-    if (j.status === 'success') {
-      showResult('resultDecrypt', 'success', [
-        ['Signature', '✓ Valid — Authentication Successful', 'success-text'],
-        ['Decrypted', j.decrypted, 'success-text'],
-        ['Auth Method', j.auth_method]
-      ]);
-    } else {
-      showResult('resultDecrypt', 'error', [
-        ['Signature', '✗ ' + j.message, 'error-text'],
-        ['Tampered', j.tampered ? 'Yes — Data integrity compromised' : 'Unknown', 'error-text']
-      ]);
-    }
+    if (j.status === 'success') showResult('resultDecrypt', 'success', [['Signature', '✓ Valid', 'success-text'], ['Decrypted', j.decrypted, 'success-text']]);
+    else showResult('resultDecrypt', 'error', [['Signature', '✗ Invalid', 'error-text'], ['Error', j.message]]);
   } catch(e) { showError('resultDecrypt', e.message); }
   setLoading(this, false);
 });
 
-// ── Tamper Test ──
 document.getElementById('btnTamper').addEventListener('click', async function() {
-  const spi = document.getElementById('tampSpi').value;
-  const text = document.getElementById('tampText').value;
-  if (!spi || !text) return showError('resultTamper', 'Enter SPI and message.');
+  const spi = document.getElementById('tampSpi').value, text = document.getElementById('tampText').value;
   setLoading(this, true);
   try {
     const j = await apiPost('/api/tamper_test', { spi, text });
-    if (j.status === 'success') {
-      showResult('resultTamper', j.tamper_detected ? 'success' : 'error', [
-        ['Plaintext', j.plaintext],
-        ['Original CT', truncHex(j.original_ciphertext)],
-        ['Tampered CT', truncHex(j.tampered_ciphertext)],
-        ['Detected', j.tamper_detected
-          ? '✓ TAMPERING DETECTED — Signature verification failed as expected'
-          : '✗ TAMPERING NOT DETECTED — Security failure!',
-          j.tamper_detected ? 'success-text' : 'error-text']
-      ]);
-    } else showError('resultTamper', j.message);
+    if (j.status === 'success') showResult('resultTamper', j.tamper_detected?'success':'error', [['Original CT', truncHex(j.original_ciphertext)], ['Tampered CT', truncHex(j.tampered_ciphertext)], ['Detected', j.tamper_detected ? '✓ TAMPERING DETECTED' : '✗ FAILED', j.tamper_detected?'success-text':'error-text']]);
+    else showError('resultTamper', j.message);
   } catch(e) { showError('resultTamper', e.message); }
   setLoading(this, false);
 });
 
-// ── Database ──
-async function refreshDb() {
-  const container = document.getElementById('saTableContainer');
+document.getElementById('btnRefreshDb').addEventListener('click', async function() {
+  const c = document.getElementById('saTableContainer');
   try {
     const j = await apiGet('/api/list_sa');
-    if (j.associations.length === 0) {
-      container.innerHTML = '<div class="empty-state"><div class="icon">🗄️</div><p>No Security Associations found. Create one first.</p></div>';
-      return;
-    }
-    let html = '<div style="overflow-x:auto"><table class="sa-table"><thead><tr><th>SPI</th><th>Source</th><th>Destination</th><th>Encryption</th><th>Status</th><th>Remaining</th></tr></thead><tbody>';
-    j.associations.forEach(sa => {
-      const active = sa.active && sa.remaining > 0;
-      html += `<tr>
-        <td style="color:var(--cyan);font-weight:700">${sa.spi}</td>
-        <td>${sa.source}</td><td>${sa.destination}</td>
-        <td>${sa.encryption}</td>
-        <td><span class="status-dot ${active ? 'active' : 'expired'}"></span>${active ? 'Active' : 'Expired'}</td>
-        <td>${sa.remaining}s / ${sa.lifetime}s</td></tr>`;
-    });
-    html += '</tbody></table></div>';
-    container.innerHTML = html;
-  } catch(e) { container.innerHTML = '<div class="empty-state"><p style="color:var(--red)">Failed to load: ' + e.message + '</p></div>'; }
-}
-document.getElementById('btnRefreshDb').addEventListener('click', refreshDb);
+    if (!j.associations.length) return c.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted)">Database empty</div>';
+    let h = '<table class="sa-table"><thead><tr><th>SPI</th><th>Source</th><th>Dest</th><th>Status</th></tr></thead><tbody>';
+    j.associations.forEach(s => h += `<tr><td>${s.spi}</td><td>${s.source}</td><td>${s.destination}</td><td><span class="status-dot ${s.active&&s.remaining>0?'active':'expired'}"></span>${s.active&&s.remaining>0?'Active':'Expired'}</td></tr>`);
+    c.innerHTML = h + '</tbody></table>';
+  } catch(e) { c.innerHTML = 'Error loading database'; }
+});
 
-// ── Run Tests ──
 document.getElementById('btnRunTests').addEventListener('click', async function() {
-  const container = document.getElementById('testResults');
-  setLoading(this, true);
-  container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim)"><span class="spinner" style="width:24px;height:24px;border-width:3px"></span><p style="margin-top:12px">Running test suite...</p></div>';
+  const c = document.getElementById('testResults'); setLoading(this, true);
   try {
     const j = await apiPost('/api/run_tests', {});
-    let html = '';
-    j.results.forEach(t => {
-      html += `<div class="test-item">
-        <div class="test-icon ${t.passed ? 'pass' : 'fail'}">${t.passed ? '✓' : '✗'}</div>
-        <div class="test-info"><div class="test-name">${t.name}</div><div class="test-detail">${t.detail}</div></div>
-      </div>`;
-    });
-    html += `<div class="test-summary ${j.all_passed ? 'pass' : 'fail'}">${j.all_passed ? '✓ ALL 6 TEST CASES PASSED' : '✗ SOME TESTS FAILED'}</div>`;
-    container.innerHTML = html;
-  } catch(e) { container.innerHTML = '<div style="color:var(--red)">Error: ' + e.message + '</div>'; }
+    let h = ''; j.results.forEach(t => h += `<div class="test-item"><div class="test-icon ${t.passed?'pass':'fail'}">${t.passed?'✓':'✗'}</div><div><div class="test-name">${t.name}</div><div class="test-detail">${t.detail}</div></div></div>`);
+    c.innerHTML = h;
+  } catch(e) { c.innerHTML = 'Error'; }
   setLoading(this, false);
 });
 </script>
