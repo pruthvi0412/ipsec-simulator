@@ -12,7 +12,8 @@ def add_sa(spi, source, destination, lifetime=3600):
     SAD[spi] = {"source": source, "destination": destination,
         "encryption": "AES-256-CBC", "authentication": "RSA-PSS-SHA256 (Digital Signature)",
         "enc_key": os.urandom(32), "private_key": private_key, "public_key": private_key.public_key(),
-        "created": time.time(), "lifetime": lifetime, "active": True}
+        "created": time.time(), "lifetime": lifetime, "active": True,
+        "last_message": "CONFIDENTIAL: Launch sequence activated."}
     return True
 
 def get_sa(spi):
@@ -46,8 +47,33 @@ def decrypt(sa, iv, cipher, sig):
 def secure_message(spi, text):
     sa = get_sa(spi)
     if not sa: raise ValueError("SA not found or expired")
+    sa["last_message"] = text
     iv, cipher, sig = encrypt(sa, text)
     return iv, cipher, sig, decrypt(sa, iv, cipher, sig)
+
+def tamper_test(spi, test_text):
+    sa = get_sa(spi)
+    if not sa: raise ValueError("SA not found")
+    original_text = sa.get("last_message", test_text)
+    
+    if test_text == original_text:
+        iv, cipher, sig = encrypt(sa, original_text)
+        try:
+            decrypt(sa, iv, cipher, sig)
+            return "NO TAMPERING DETECTED (Actual text)"
+        except ValueError:
+            return "FAIL"
+    else:
+        iv, orig_cipher, sig = encrypt(sa, original_text)
+        _, tampered_cipher, _ = encrypt(sa, test_text)
+        bad = bytearray(tampered_cipher)
+        if bad == bytearray(orig_cipher):
+            import random; bad[random.randint(0, len(bad) - 1)] ^= 0xFF
+        try:
+            decrypt(sa, iv, bytes(bad), sig)
+            return "FAIL - TAMPERING NOT DETECTED"
+        except ValueError:
+            return "TAMPERING DETECTED (Text altered)"
 
 def run_tests():
     print("=" * 66)
@@ -70,18 +96,22 @@ def run_tests():
     print("  Signature:", sig.hex())
     print("  Result: PASS - AUTHENTICATION SUCCESSFUL")
 
-    bad = bytearray(ct); bad[0] ^= 1
-    try: decrypt(get_sa(1001), iv, bytes(bad), sig); result = "FAIL - TAMPERING NOT DETECTED"
-    except ValueError: result = "PASS - TAMPERING DETECTED"
-    print("\n[Test Case 4] Tampered ciphertext")
-    print("  Result:", result)
+    print("\n[Test Case 4] Smart Tamper Test (Actual Text)")
+    result1 = tamper_test(1001, "HELLO BOB")
+    print("  Input Text:", "HELLO BOB")
+    print("  Result:", result1)
 
-    print("\n[Test Case 5] Invalid SPI lookup")
+    print("\n[Test Case 5] Smart Tamper Test (Altered Text)")
+    result2 = tamper_test(1001, "HACKED BOB")
+    print("  Input Text:", "HACKED BOB")
+    print("  Result:", result2)
+
+    print("\n[Test Case 6] Invalid SPI lookup")
     print("  SPI: 9999")
     print("  Result:", "PASS - SA NOT FOUND" if get_sa(9999) is None else "FAIL")
 
     add_sa(1002, "10.0.0.1", "10.0.0.2", lifetime=0)
-    print("\n[Test Case 6] Expired Security Association")
+    print("\n[Test Case 7] Expired Security Association")
     print("  SPI: 1002, Lifetime: 0 seconds")
     print("  Result:", "PASS - EXPIRED SA REJECTED" if get_sa(1002) is None else "FAIL")
 

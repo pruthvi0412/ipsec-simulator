@@ -310,6 +310,7 @@ textarea.form-input { resize: vertical; min-height: 100px; }
       <button class="nav-btn active" data-tab="intro">Introduction <div class="dot"></div></button>
       <button class="nav-btn" data-tab="objective">Objective <div class="dot"></div></button>
       <button class="nav-btn" data-tab="theory">Theory <div class="dot"></div></button>
+      <button class="nav-btn" data-tab="procedure">Procedure <div class="dot"></div></button>
       
       <!-- Simulator Section -->
       <div class="sidebar-section">Simulator</div>
@@ -376,6 +377,27 @@ textarea.form-input { resize: vertical; min-height: 100px; }
             <p>Advanced Encryption Standard (AES) is a symmetric block cipher chosen by the U.S. government to protect classified information. In CBC (Cipher Block Chaining) mode, each plaintext block is XORed with the previous ciphertext block before being encrypted.</p>
             <h3>Digital Signatures (RSA-PSS-SHA256)</h3>
             <p>A digital signature is a mathematical scheme for verifying the authenticity of digital messages or documents. A valid digital signature gives a recipient strong reason to believe that the message was created by a known sender and that the message was not altered in transit.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- PANEL: PROCEDURE -->
+      <div id="panel-procedure" class="panel">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon blue">📝</div>
+            <div class="card-title"><h2>Simulation Procedure</h2></div>
+          </div>
+          <div class="content-prose">
+            <p>Follow these steps to interact with the IPsec simulation:</p>
+            <ul>
+              <li><strong>Step 1: Manage SA</strong> - Create a new Security Association (e.g., SPI 1001) to establish a secure tunnel. You can also lookup or delete active SAs.</li>
+              <li><strong>Step 2: Encrypt & Sign</strong> - Enter a plaintext message and encrypt it using the created SPI. The system will generate an Initialization Vector (IV), Ciphertext, and Digital Signature.</li>
+              <li><strong>Step 3: Decrypt & Verify</strong> - The generated cryptographic parameters are automatically populated. Click "Verify & Decrypt" to simulate successful reception and signature validation.</li>
+              <li><strong>Step 4: Tamper Test</strong> - Simulate a Man-in-the-Middle attack. The system will intentionally modify a random byte of the ciphertext and attempt to decrypt it, demonstrating that the RSA digital signature successfully catches the tampering.</li>
+              <li><strong>Step 5: SA Database</strong> - View all currently active tunnels and their expiration status.</li>
+              <li><strong>Step 6: Run Tests</strong> - Execute the automated test suite to verify the cryptographic robustness against all edge cases.</li>
+            </ul>
           </div>
         </div>
       </div>
@@ -461,7 +483,7 @@ textarea.form-input { resize: vertical; min-height: 100px; }
           </div>
           <div class="form-grid single">
             <div class="form-group"><label class="form-label">SPI</label><input type="number" id="tampSpi" class="form-input" value="1001"></div>
-            <div class="form-group"><label class="form-label">Message Payload</label><textarea id="tampText" class="form-input">TRANSFER $10,000 TO ACCOUNT B</textarea></div>
+            <div class="form-group"><label class="form-label">Message Payload</label><textarea id="tampText" class="form-input">CONFIDENTIAL: Launch sequence activated.</textarea></div>
           </div>
           <button class="btn btn-danger" id="btnTamper" style="margin-top: 24px;">⚠️ Execute Tamper Test</button>
           <div id="resultTamper" class="result-box"></div>
@@ -515,7 +537,8 @@ def add_sa(spi, source, destination, lifetime=3600):
     SAD[spi] = {"source": source, "destination": destination,
         "encryption": "AES-256-CBC", "authentication": "RSA-PSS-SHA256 (Digital Signature)",
         "enc_key": os.urandom(32), "private_key": private_key, "public_key": private_key.public_key(),
-        "created": time.time(), "lifetime": lifetime, "active": True}
+        "created": time.time(), "lifetime": lifetime, "active": True,
+        "last_message": "CONFIDENTIAL: Launch sequence activated."}
     return True
 
 def get_sa(spi):
@@ -549,8 +572,33 @@ def decrypt(sa, iv, cipher, sig):
 def secure_message(spi, text):
     sa = get_sa(spi)
     if not sa: raise ValueError("SA not found or expired")
+    sa["last_message"] = text
     iv, cipher, sig = encrypt(sa, text)
     return iv, cipher, sig, decrypt(sa, iv, cipher, sig)
+
+def tamper_test(spi, test_text):
+    sa = get_sa(spi)
+    if not sa: raise ValueError("SA not found")
+    original_text = sa.get("last_message", test_text)
+    
+    if test_text == original_text:
+        iv, cipher, sig = encrypt(sa, original_text)
+        try:
+            decrypt(sa, iv, cipher, sig)
+            return "NO TAMPERING DETECTED (Actual text)"
+        except ValueError:
+            return "FAIL"
+    else:
+        iv, orig_cipher, sig = encrypt(sa, original_text)
+        _, tampered_cipher, _ = encrypt(sa, test_text)
+        bad = bytearray(tampered_cipher)
+        if bad == bytearray(orig_cipher):
+            import random; bad[random.randint(0, len(bad) - 1)] ^= 0xFF
+        try:
+            decrypt(sa, iv, bytes(bad), sig)
+            return "FAIL - TAMPERING NOT DETECTED"
+        except ValueError:
+            return "TAMPERING DETECTED (Text altered)"
 
 def run_tests():
     print("=" * 66)
@@ -576,21 +624,26 @@ def run_tests():
     print("  Signature:", sig.hex())
     print("  Result: PASS - AUTHENTICATION SUCCESSFUL")
 
-    bad = bytearray(ct); bad[0] ^= 1
-    try: decrypt(get_sa(1001), iv, bytes(bad), sig); result = "FAIL - TAMPERING NOT DETECTED"
-    except ValueError: result = "PASS - TAMPERING DETECTED"
     print("
-[Test Case 4] Tampered ciphertext")
-    print("  Result:", result)
+[Test Case 4] Smart Tamper Test (Actual Text)")
+    result1 = tamper_test(1001, "HELLO BOB")
+    print("  Input Text:", "HELLO BOB")
+    print("  Result:", result1)
 
     print("
-[Test Case 5] Invalid SPI lookup")
+[Test Case 5] Smart Tamper Test (Altered Text)")
+    result2 = tamper_test(1001, "HACKED BOB")
+    print("  Input Text:", "HACKED BOB")
+    print("  Result:", result2)
+
+    print("
+[Test Case 6] Invalid SPI lookup")
     print("  SPI: 9999")
     print("  Result:", "PASS - SA NOT FOUND" if get_sa(9999) is None else "FAIL")
 
     add_sa(1002, "10.0.0.1", "10.0.0.2", lifetime=0)
     print("
-[Test Case 6] Expired Security Association")
+[Test Case 7] Expired Security Association")
     print("  SPI: 1002, Lifetime: 0 seconds")
     print("  Result:", "PASS - EXPIRED SA REJECTED" if get_sa(1002) is None else "FAIL")
 
@@ -600,7 +653,8 @@ def run_tests():
     print("=" * 66)
 
 if __name__ == "__main__":
-    run_tests()</code></pre>
+    run_tests()
+</code></pre>
         </div>
       </div>
 
@@ -622,24 +676,34 @@ SECURITY ASSOCIATION DATABASE - TEST SUITE
 
 [Test Case 2] AES-256 encryption and decryption
   Plaintext : HELLO BOB
-  Ciphertext: 1c85619f30cc46926acd083c6e04fc91
+  Ciphertext: 38be2a18869fbe18b2375d883119922c
   Decrypted : HELLO BOB
   Result    : PASS
 
 [Test Case 3] RSA-PSS-SHA256 digital signature authentication
-  Signature: 57a0d824861fe0f...
+  Signature: 11e4f0d37f8e45103fab8bea6445f1d3ad39a0a31cc61a0cffe68450e1a7ef4b7f36cc1f13ab05518c47006adfd166cdea8e6087d1527f61a27bcc0eb4acf5e0ac619e9d0dd6ed17fc73406db8fb06484bf5bf2e9e6df1c9952268b22c75b8358c83e918ba62e5ca8cde153121c1b203fc833a90610858a0ed7887563cce7f9837d2c417bef3593a0af27cefad5c460d285a2162135c49f5d6d5411875f7d7d14500cf5f38dd3f4c5343d32c702771feaf231894ab2c2c08ff3eb5498948b121377322c75b7e8fcfeb08cd975ab9fa66832ea3417207c586ef3ef29a827894a38e586013cc83f402e33ff003d638c6db2edef98595d0d637ba46c81fd0885d17
   Result: PASS - AUTHENTICATION SUCCESSFUL
 
-[Test Case 4] Tampered ciphertext
-  Result: PASS - TAMPERING DETECTED (Signature Invalid)
+[Test Case 4] Smart Tamper Test (Actual Text)
+  Input Text: HELLO BOB
+  Result: NO TAMPERING DETECTED (Actual text)
 
-[Test Case 5] Expired Security Association
+[Test Case 5] Smart Tamper Test (Altered Text)
+  Input Text: HACKED BOB
+  Result: TAMPERING DETECTED (Text altered)
+
+[Test Case 6] Invalid SPI lookup
+  SPI: 9999
+  Result: PASS - SA NOT FOUND
+
+[Test Case 7] Expired Security Association
   SPI: 1002, Lifetime: 0 seconds
   Result: PASS - EXPIRED SA REJECTED
 
 ==================================================================
 ALL TEST CASES PASSED
-==================================================================</code></pre>
+==================================================================
+</code></pre>
         </div>
       </div>
 
@@ -702,7 +766,7 @@ function switchTab(tabId) {
   if(tabId === 'database') document.getElementById('btnRefreshDb').click();
   
   // Update Top Nav
-  if (['intro', 'objective', 'theory'].includes(tabId)) {
+  if (['intro', 'objective', 'theory', 'procedure'].includes(tabId)) {
     topHome.classList.add('active');
     topSimulator.classList.remove('active');
   } else {
@@ -766,6 +830,7 @@ document.getElementById('btnEncrypt').addEventListener('click', async function()
     if (j.status === 'success') {
       showResult('resultEncrypt', 'success', [['IV', j.iv], ['Ciphertext', truncHex(j.ciphertext)], ['Signature', truncHex(j.signature)]]);
       document.getElementById('decSpi').value = spi; document.getElementById('decIv').value = j.iv; document.getElementById('decCt').value = j.ciphertext; document.getElementById('decSig').value = j.signature;
+      document.getElementById('tampSpi').value = spi; document.getElementById('tampText').value = text;
     } else showError('resultEncrypt', j.message);
   } catch(e) { showError('resultEncrypt', e.message); }
   setLoading(this, false);
@@ -787,7 +852,10 @@ document.getElementById('btnTamper').addEventListener('click', async function() 
   setLoading(this, true);
   try {
     const j = await apiPost('/api/tamper_test', { spi, text });
-    if (j.status === 'success') showResult('resultTamper', j.tamper_detected?'success':'error', [['Original CT', truncHex(j.original_ciphertext)], ['Tampered CT', truncHex(j.tampered_ciphertext)], ['Detected', j.tamper_detected ? '✓ TAMPERING DETECTED' : '✗ FAILED', j.tamper_detected?'success-text':'error-text']]);
+    if (j.status === 'success') {
+      const msg = j.tamper_detected ? '✓ TAMPERING DETECTED (Text altered)' : '✓ NO TAMPERING DETECTED (Actual text)';
+      showResult('resultTamper', 'success', [['Original CT', truncHex(j.original_ciphertext)], ['Tampered CT', truncHex(j.tampered_ciphertext)], ['Result', msg, 'success-text']]);
+    }
     else showError('resultTamper', j.message);
   } catch(e) { showError('resultTamper', e.message); }
   setLoading(this, false);

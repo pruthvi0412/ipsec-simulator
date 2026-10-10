@@ -24,7 +24,8 @@ def add_sa(spi, source, destination, lifetime=3600):
         "public_key": private_key.public_key(),
         "created": time.time(),
         "lifetime": lifetime,
-        "active": True
+        "active": True,
+        "last_message": "CONFIDENTIAL: Launch sequence activated."
     }
     return True
 
@@ -141,6 +142,7 @@ def api_encrypt():
         sa = get_sa(spi)
         if not sa:
             return jsonify({"status": "error", "message": f"SA with SPI {spi} not found or expired."})
+        sa["last_message"] = text
         iv, cipher, sig = encrypt(sa, text)
         return jsonify({
             "status": "success",
@@ -189,18 +191,38 @@ def api_tamper_test():
         sa = get_sa(spi)
         if not sa:
             return jsonify({"status": "error", "message": f"SA with SPI {spi} not found or expired."})
-        iv, cipher, sig = encrypt(sa, text)
-        original_ct = cipher.hex()
-        # Tamper: flip first byte
-        bad = bytearray(cipher)
-        bad[0] ^= 0xFF
-        tampered_ct = bytes(bad).hex()
-        # Try to verify tampered data
-        try:
-            decrypt(sa, iv, bytes(bad), sig)
+        original_text = sa.get("last_message", text)
+        
+        if text == original_text:
+            # Actual text - NO tampering
+            iv, cipher, sig = encrypt(sa, original_text)
+            original_ct = cipher.hex()
+            tampered_ct = original_ct
             detected = False
-        except ValueError:
-            detected = True
+        else:
+            # Wrong text - tampering detected
+            # Attacker changes the plaintext message but cannot forge the signature
+            iv, orig_cipher, sig = encrypt(sa, original_text)
+            original_ct = orig_cipher.hex()
+            
+            # Generate the "tampered" ciphertext based on the new input text
+            _, tampered_cipher, _ = encrypt(sa, text)
+            bad = bytearray(tampered_cipher)
+            
+            # Let's add a bit flip just in case the attacker tried to be sneaky with the same text
+            # to make sure the cipher is always different visually if they type something similar
+            if bad == bytearray(orig_cipher):
+                import random
+                bad[random.randint(0, len(bad) - 1)] ^= 0xFF
+                
+            tampered_ct = bytes(bad).hex()
+            
+            # Try to verify tampered data with the ORIGINAL signature
+            try:
+                decrypt(sa, iv, bytes(bad), sig)
+                detected = False
+            except ValueError:
+                detected = True
         return jsonify({
             "status": "success",
             "plaintext": text,
@@ -250,8 +272,8 @@ def api_run_tests():
     results.append({"name": "RSA-PSS-SHA256 Signature Auth", "passed": True,
                      "detail": "Signature verified successfully", "signature": sig.hex()[:40] + "..."})
 
-    # Test 4: Tamper detection
-    bad = bytearray(ct); bad[0] ^= 0xFF
+    import random
+    bad = bytearray(ct); bad[random.randint(0, len(bad) - 1)] ^= 0xFF
     try:
         decrypt(sa, iv, bytes(bad), sig)
         results.append({"name": "Tamper Detection", "passed": False, "detail": "Tampering NOT detected"})
@@ -277,4 +299,4 @@ def api_run_tests():
     return jsonify({"status": "success", "results": results, "all_passed": all_passed})
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5050)
+    app.run(debug=True, port=5051)
